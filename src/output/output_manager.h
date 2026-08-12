@@ -44,7 +44,7 @@ class OutputManager {
   uint16_t frameIntervalMs() const;
 
  private:
-  void applyUartConfig(const OutputConfig& cfg);
+  bool applyUartConfig(const OutputConfig& cfg);
   size_t encode(const RCFrame& frame, uint8_t* out, size_t out_cap);
   bool uartConfigChanged(const OutputConfig& a, const OutputConfig& b) const;
 
@@ -70,6 +70,5 @@ class OutputManager {
   FailsafeMode failsafe_mode_;
   uint16_t failsafe_values_[RC_CHANNEL_COUNT];
 
-  bool link_was_valid_;        // link_valid observed on the previous update() call
   bool stop_pwm_flag_sent_;    // STOP_PWM: true once the single flagged frame has gone out
 };

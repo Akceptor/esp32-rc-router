@@ -16,7 +16,6 @@ OutputManager::OutputManager(IUartPort& uart)
       last_frame_size_(0),
       failsafe_mode_(FailsafeMode::HOLD_LAST),
       failsafe_values_(),
-      link_was_valid_(true),
       stop_pwm_flag_sent_(false) {
   memset(tx_scratch_, 0, sizeof(tx_scratch_));
   rcFrameInit(last_good_frame_);
@@ -31,7 +30,7 @@ bool OutputManager::uartConfigChanged(const OutputConfig& a, const OutputConfig&
   return false;
 }
 
-void OutputManager::applyUartConfig(const OutputConfig& cfg) {
+bool OutputManager::applyUartConfig(const OutputConfig& cfg) {
   uint32_t baud = cfg.baud;
   uint32_t serial_cfg = UART_CONFIG_8N1;
   bool inverted = cfg.inverted;
@@ -46,18 +45,17 @@ void OutputManager::applyUartConfig(const OutputConfig& cfg) {
   }
 
   uart_.end();
-  uart_.begin(baud, serial_cfg, cfg.rx_pin, cfg.tx_pin, inverted);
+  return uart_.begin(baud, serial_cfg, cfg.rx_pin, cfg.tx_pin, inverted);
 }
 
 bool OutputManager::begin(const OutputConfig& cfg) {
   cfg_ = cfg;
-  applyUartConfig(cfg_);
+  bool ok = applyUartConfig(cfg_);
   mapper_.setMap(cfg_.channel_map);
   has_sent_once_ = false;
   has_last_good_frame_ = false;
-  link_was_valid_ = true;
   stop_pwm_flag_sent_ = false;
-  return true;
+  return ok;
 }
 
 void OutputManager::setConfig(const OutputConfig& cfg) {
@@ -137,7 +135,9 @@ void OutputManager::update(uint32_t now_ms, const RCFrame& frame, bool link_vali
           // One final frame, flagged, then silence. For SBUS the failsafe bit is set
           // in the frame itself via SbusGenerator::setFailsafe(true); for CRSF/MAVLink
           // there is no per-frame failsafe bit, so the single frame carries the last
-          // known-good (or failsafe) values and silence follows immediately after.
+          // known-good mapped frame (never the configured failsafe_values_ array —
+          // STOP_PWM is a silence-based failsafe, not a values-based one), and silence
+          // follows immediately after.
           to_send = has_last_good_frame_ ? last_good_frame_ : frame;
           if (cfg_.protocol == ProtocolType::SBUS) {
             sbus_.setFailsafe(true);
@@ -147,8 +147,6 @@ void OutputManager::update(uint32_t now_ms, const RCFrame& frame, bool link_vali
         break;
     }
   }
-
-  link_was_valid_ = link_valid;
 
   if (!should_send) {
     if (cfg_.protocol == ProtocolType::SBUS) {
