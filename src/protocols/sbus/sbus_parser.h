@@ -31,10 +31,12 @@ class SbusParser {
 
   void decodeFrame(uint32_t now_ms);
   void recomputeLinkQuality();
+  bool isValidFrameCandidate() const;
 
   State state_;
   uint8_t buf_[SBUS_FRAME_SIZE];
   size_t buf_len_;
+  bool crc_error_counted_;
 
   RCFrame frame_;
   LinkQuality link_;

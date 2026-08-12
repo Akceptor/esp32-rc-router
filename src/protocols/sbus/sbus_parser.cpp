@@ -15,6 +15,7 @@ SbusParser::SbusParser() { reset(); }
 void SbusParser::reset() {
   state_ = State::WAIT_HEADER;
   buf_len_ = 0;
+  crc_error_counted_ = false;
   rcFrameInit(frame_);
   linkQualityInit(link_);
   has_frame_ = false;
@@ -53,16 +54,29 @@ size_t SbusParser::push(const uint8_t* data, size_t len, uint32_t now_ms) {
     // WAIT_BODY
     buf_[buf_len_++] = b;
     if (buf_len_ == SBUS_FRAME_SIZE) {
-      if (buf_[SBUS_FRAME_SIZE - 1] == SBUS_FOOTER) {
+      if (isValidFrameCandidate()) {
         size_t before = frames_decoded_;
         decodeFrame(now_ms);
         if (frames_decoded_ != before) decoded++;
         state_ = State::WAIT_HEADER;
         buf_len_ = 0;
+        crc_error_counted_ = false;  // episode resolved; next mismatch is new
       } else {
-        // footer mismatch: discard the leading header byte and try to resync
-        // by scanning the buffered bytes for a fresh header candidate.
-        crc_errors_++;
+        // Candidate rejected. A byte merely equal to SBUS_HEADER is never
+        // trusted as a new frame start on its own: we shift the window so
+        // that byte becomes buf_[0], but we do NOT decode from it yet. It
+        // only gets accepted once buf_ fills back up to SBUS_FRAME_SIZE and
+        // isValidFrameCandidate() passes on *that* alignment (i.e. the byte
+        // 24 positions later really is the footer, plus the flag-byte
+        // plausibility check below). Ordinary SBUS channel payloads can
+        // legitimately contain 0x0F bytes by coincidence, so a single
+        // corruption event can require several such rejected candidates
+        // before the true frame boundary is found; count that whole hunt as
+        // one CRC error, not one per rejected candidate.
+        if (!crc_error_counted_) {
+          crc_errors_++;
+          crc_error_counted_ = true;
+        }
         bool resynced = false;
         for (size_t k = 1; k < buf_len_; k++) {
           if (buf_[k] == SBUS_HEADER) {
@@ -76,11 +90,25 @@ size_t SbusParser::push(const uint8_t* data, size_t len, uint32_t now_ms) {
         if (!resynced) {
           buf_len_ = 0;
           state_ = State::WAIT_HEADER;
+          crc_error_counted_ = false;  // fully lost sync; next episode is new
         }
       }
     }
   }
   return decoded;
+}
+
+bool SbusParser::isValidFrameCandidate() const {
+  if (buf_[SBUS_FRAME_SIZE - 1] != SBUS_FOOTER) return false;
+  // SBUS flag byte (buf_[23]) reserved bits 4-7 are always zero on real
+  // frames (only bits 2/3 -- frame_lost/failsafe -- are used here). Requiring
+  // them to be zero is a second, independent check beyond the footer byte,
+  // which meaningfully narrows the odds that a false resync alignment (one
+  // that isn't the true frame boundary) is coincidentally accepted just
+  // because a 0x00 byte happens to sit 24 positions later.
+  uint8_t flags = buf_[23];
+  if ((flags & 0xF0) != 0) return false;
+  return true;
 }
 
 void SbusParser::decodeFrame(uint32_t now_ms) {

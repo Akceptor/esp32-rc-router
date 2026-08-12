@@ -28,6 +28,14 @@ static void buildSbusFrame(const uint16_t raw[16], uint8_t flags, uint8_t out[25
   out[24] = 0x00;
 }
 
+static size_t countByteOccurrences(const uint8_t* data, size_t len, uint8_t value) {
+  size_t count = 0;
+  for (size_t i = 0; i < len; i++) {
+    if (data[i] == value) count++;
+  }
+  return count;
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -106,6 +114,53 @@ static void test_wrong_footer_rejected_and_resyncs(void) {
   size_t n = parser.push(buf, sizeof(buf), 900);
   TEST_ASSERT_EQUAL_UINT32(1, n);  // bad frame dropped, good frame decoded after resync
   TEST_ASSERT_TRUE(parser.hasFrame());
+  // This bad frame's own payload legitimately contains 0x0F bytes (verified
+  // independently: raw=1000 repeated 16x packs to two spurious 0x0F bytes in
+  // the 22-byte data region), so a naive resync that trusts the first 0x0F
+  // sighting would attempt multiple false realignments while hunting for the
+  // real boundary. Those internal attempts must not inflate crcErrors() --
+  // exactly one CRC error should be recorded for this one corruption event.
+  TEST_ASSERT_EQUAL_UINT32(1, parser.crcErrors());
+}
+
+// Adversarial: the corrupted frame's payload is chosen so it contains
+// SEVERAL 0x0F bytes before the real next frame arrives. A resync that
+// blindly jumps to the first byte equal to SBUS_HEADER and treats it as a
+// legitimate frame start (rather than requiring the footer 24 bytes later to
+// actually validate) would either mis-decode garbage or, at minimum, report
+// an inflated/unbounded crcErrors() count as it thrashes through each false
+// candidate. This verifies the count stays sane (one error per corruption
+// episode) and the real subsequent frame still decodes correctly.
+static void test_resync_survives_payload_with_multiple_header_byte_values(void) {
+  SbusParser parser;
+  // Raw channel values independently verified (via offline simulation of the
+  // exact LSB-first 11-bit packing) to place 0x0F at three separate offsets
+  // within the 22-byte data region of the corrupted frame.
+  uint16_t raw_adv[16] = {1215, 1972, 1795, 827,  1610, 605,  727, 717,
+                           271,  1301, 892,  2044, 16,   402,  1404, 120};
+  uint8_t bad_frame[25];
+  buildSbusFrame(raw_adv, 0x00, bad_frame);
+  TEST_ASSERT_TRUE(3 <= countByteOccurrences(&bad_frame[1], 22, 0x0F));
+  bad_frame[24] = 0x99;  // corrupt footer
+
+  uint16_t raw_good[16];
+  for (int i = 0; i < 16; i++) raw_good[i] = 992;
+  uint8_t good_frame[25];
+  buildSbusFrame(raw_good, 0x00, good_frame);
+
+  uint8_t buf[25 + 25];
+  memcpy(buf, bad_frame, 25);
+  memcpy(buf + 25, good_frame, 25);
+
+  size_t n = parser.push(buf, sizeof(buf), 700);
+  TEST_ASSERT_EQUAL_UINT32(1, n);
+  TEST_ASSERT_TRUE(parser.hasFrame());
+  TEST_ASSERT_EQUAL_UINT32(1, parser.crcErrors());
+  TEST_ASSERT_EQUAL_UINT32(1, parser.framesDecoded());
+  const RCFrame& f = parser.frame();
+  for (int i = 0; i < RC_CHANNEL_COUNT; i++) {
+    TEST_ASSERT_EQUAL_UINT16(1500, f.channels[i]);
+  }
 }
 
 static void test_split_push_works(void) {
@@ -187,6 +242,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_frame_lost_flag_drops_lq);
   RUN_TEST(test_failsafe_flag_sets_failsafe);
   RUN_TEST(test_wrong_footer_rejected_and_resyncs);
+  RUN_TEST(test_resync_survives_payload_with_multiple_header_byte_values);
   RUN_TEST(test_split_push_works);
   RUN_TEST(test_all_min_and_max_raw_clamp);
   RUN_TEST(test_garbage_prefix_skipped);
