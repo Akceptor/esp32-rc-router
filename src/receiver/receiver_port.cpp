@@ -51,23 +51,23 @@ bool ReceiverPort::needsRebegin(const ReceiverPortConfig& next) const {
   return false;
 }
 
-void ReceiverPort::reapply(const ReceiverPortConfig& cfg) {
+bool ReceiverPort::reapply(const ReceiverPortConfig& cfg) {
   uint32_t baud, serial_config;
   bool inverted;
   effectiveUartParams(cfg, baud, serial_config, inverted);
   uart_.end();
-  uart_.begin(baud, serial_config, cfg.rx_pin, cfg.tx_pin, inverted);
+  bool ok = uart_.begin(baud, serial_config, cfg.rx_pin, cfg.tx_pin, inverted);
   crsf_.reset();
   sbus_.reset();
   mavlink_.reset();
   bytes_read_ = 0;
-  began_ = true;
+  began_ = ok;
+  return ok;
 }
 
 bool ReceiverPort::begin(const ReceiverPortConfig& cfg) {
   cfg_ = cfg;
-  reapply(cfg_);
-  return began_;
+  return reapply(cfg_);
 }
 
 void ReceiverPort::setConfig(const ReceiverPortConfig& cfg) {

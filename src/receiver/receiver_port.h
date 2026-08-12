@@ -35,7 +35,7 @@ class ReceiverPort {
   static void effectiveUartParams(const ReceiverPortConfig& cfg, uint32_t& baud,
                                    uint32_t& serial_config, bool& inverted);
   bool needsRebegin(const ReceiverPortConfig& next) const;
-  void reapply(const ReceiverPortConfig& cfg);
+  bool reapply(const ReceiverPortConfig& cfg);
 
   uint8_t index_;
   IUartPort& uart_;
