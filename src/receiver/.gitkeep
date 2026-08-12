@@ -1,0 +1,2 @@
+Placeholder so the empty src/receiver/ directory is tracked by git.
+Populated starting with the receiver-port task (ReceiverPort / ReceiverManager).

@@ -1,0 +1,2 @@
+Placeholder so the empty src/telemetry/ directory is tracked by git.
+Populated starting with the VoltageMonitor / TelemetryRouter task.
