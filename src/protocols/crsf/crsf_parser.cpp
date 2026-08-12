@@ -100,15 +100,9 @@ size_t CrsfParser::drainBuffer(uint32_t now_ms) {
       break;  // need more data bytes
     }
 
-    uint8_t type = buf_[2];
-    // NOTE: real CRSF computes the CRC over the full Type+Payload span
-    // (length - 1 bytes). RC_CHANNELS_PACKED frames follow that. However,
-    // this parser also matches the exact CRC window used to construct the
-    // fixed LINK_STATISTICS / BATTERY_SENSOR test vectors, which compute
-    // CRC over only (length - 2) bytes (Type + payload minus its last
-    // byte). See task-5-report.md "Self-review findings" for details.
-    size_t crc_window = (type == CRSF_TYPE_RC_CHANNELS_PACKED) ? (length - 1u) : (length - 2u);
-    uint8_t computed_crc = crsfCrc8(&buf_[2], crc_window);
+    // Real CRSF computes the CRC over the full Type+Payload span
+    // (length - 1 bytes) uniformly for all frame types.
+    uint8_t computed_crc = crsfCrc8(&buf_[2], length - 1u);
     uint8_t received_crc = buf_[total_needed - 1];
 
     if (computed_crc == received_crc) {

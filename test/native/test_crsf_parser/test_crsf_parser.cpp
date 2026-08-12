@@ -122,7 +122,7 @@ static void test_link_statistics_updates_rssi_lq(void) {
   frame[10] = 0;    // downlink_rssi
   frame[11] = 0;    // downlink_link_quality
   frame[12] = 0;    // downlink_snr
-  uint8_t crc = crsfCrc8(&frame[2], 10);
+  uint8_t crc = crsfCrc8(&frame[2], 11);
   frame[13] = crc;
 
   size_t n = parser.push(frame, sizeof(frame), 100);
@@ -149,7 +149,7 @@ static void test_lq_zero_sets_failsafe(void) {
   frame[10] = 0;
   frame[11] = 0;
   frame[12] = 0;
-  uint8_t crc = crsfCrc8(&frame[2], 10);
+  uint8_t crc = crsfCrc8(&frame[2], 11);
   frame[13] = crc;
 
   parser.push(frame, sizeof(frame), 200);
@@ -188,7 +188,7 @@ static void test_telemetry_frame_lands_in_pop_and_fifo_empties(void) {
   frame[7] = 0x00;  // capacity byte0
   frame[8] = 0x00;  // capacity byte1
   frame[9] = 0x05;  // capacity byte2 / remaining percent depending on layout
-  uint8_t crc = crsfCrc8(&frame[2], 7);
+  uint8_t crc = crsfCrc8(&frame[2], 8);
   frame[10] = crc;
 
   size_t n = parser.push(frame, sizeof(frame), 300);
