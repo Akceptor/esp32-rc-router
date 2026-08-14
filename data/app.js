@@ -1,41 +1,12 @@
 'use strict';
 
 /* ---------------------------------------------------------------------
- * IP <-> uint32 helpers.
- *
- * Byte order convention: the firmware stores NetworkConfig.static_ip / gateway /
- * netmask as a plain uint32_t built the same way the config_json layer (Task 18)
- * serializes it: MOST significant octet of the dotted-quad in the HIGH byte of
- * the integer (standard network / big-endian byte order), i.e. for "192.168.1.50":
- *   value = (192 << 24) | (168 << 16) | (1 << 8) | 50
- * This is NOT the raw in-memory byte order of an ESP32 IPAddress (which stores
- * octets in wire order at ascending addresses, effectively little-endian when
- * read as a uint32 on that little-endian CPU) — the config layer explicitly
- * re-packs to big-endian before JSON so the value is portable across any client.
- * Keep this function and config_json's ipToUint32/uint32ToIp in lock-step; if one
- * side changes the byte order, both must change together.
+ * IP fields (status.ip, network.static_ip/gateway/netmask) are sent and
+ * received as pre-formatted dotted-quad strings (e.g. "192.168.1.50") by the
+ * backend (config_json.cpp's ipU32ToString / ipStringToU32 do the uint32 <->
+ * string conversion server-side). The frontend uses these strings as-is with
+ * no client-side conversion.
  * ------------------------------------------------------------------- */
-function ipToString(u32) {
-  u32 = u32 >>> 0;
-  return [
-    (u32 >>> 24) & 0xff,
-    (u32 >>> 16) & 0xff,
-    (u32 >>> 8) & 0xff,
-    u32 & 0xff,
-  ].join('.');
-}
-
-function stringToIp(str) {
-  const parts = String(str).trim().split('.');
-  if (parts.length !== 4) return 0;
-  let u32 = 0;
-  for (let i = 0; i < 4; i++) {
-    const octet = parseInt(parts[i], 10);
-    if (isNaN(octet) || octet < 0 || octet > 255) return 0;
-    u32 = (u32 * 256) + octet;
-  }
-  return u32 >>> 0;
-}
 
 /* ---------------------------------------------------------------------
  * Fetch helper with a sticky error banner.
@@ -132,7 +103,7 @@ function renderStatus(s) {
   document.getElementById('dash-wifi-connected').textContent = s.wifi_connected ? 'connected' : 'down';
   document.getElementById('dash-wifi-ap-mode').textContent = s.wifi_ap_mode ? 'AP' : 'STA';
   document.getElementById('dash-wifi-rssi').textContent = s.wifi_rssi + ' dBm';
-  document.getElementById('dash-ip').textContent = ipToString(s.ip);
+  document.getElementById('dash-ip').textContent = s.ip;
 }
 
 function formatUptime(seconds) {
@@ -199,26 +170,17 @@ async function loadReceivers() {
   const r = await api('/api/config/receivers');
   fillReceiverPort(0, r.receivers[0]);
   fillReceiverPort(1, r.receivers[1]);
-  document.getElementById('sel-rssi-threshold').value = r.selection.rssi_threshold_percent;
-  document.getElementById('sel-lq-threshold').value = r.selection.lq_threshold_percent;
-  document.getElementById('sel-hysteresis').value = r.selection.hysteresis_percent;
-  document.getElementById('sel-switch-delay').value = r.selection.switch_delay_ms;
-  document.getElementById('sel-min-active-time').value = r.selection.min_active_time_ms;
-  document.getElementById('sel-link-timeout').value = r.selection.link_timeout_ms;
+  // NOTE: the backend (config_json.cpp) does not currently serialize a
+  // `selection` (SelectionConfig) section at all -- there is no
+  // /api/config/* endpoint for it yet. These "Selection tuning" fields are
+  // left as-is (not populated from the server) until that backend support
+  // exists; they are intentionally not sent on submit either.
 }
 
 document.getElementById('receivers-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const body = {
     receivers: [readReceiverPort(0), readReceiverPort(1)],
-    selection: {
-      rssi_threshold_percent: parseInt(document.getElementById('sel-rssi-threshold').value, 10),
-      lq_threshold_percent: parseInt(document.getElementById('sel-lq-threshold').value, 10),
-      hysteresis_percent: parseInt(document.getElementById('sel-hysteresis').value, 10),
-      switch_delay_ms: parseInt(document.getElementById('sel-switch-delay').value, 10),
-      min_active_time_ms: parseInt(document.getElementById('sel-min-active-time').value, 10),
-      link_timeout_ms: parseInt(document.getElementById('sel-link-timeout').value, 10),
-    },
   };
   const r = await api('/api/config/receivers', 'POST', body);
   flashSaveStatus('receivers-save-status', r);
@@ -242,20 +204,25 @@ function buildChannelMapRows() {
 buildChannelMapRows();
 
 async function loadOutput() {
-  const r = await api('/api/config/output');
-  document.getElementById('out-protocol').value = String(r.output.protocol);
-  document.getElementById('out-baud').value = r.output.baud;
-  document.getElementById('out-txpin').value = r.output.tx_pin;
-  document.getElementById('out-rxpin').value = r.output.rx_pin;
-  document.getElementById('out-inverted').checked = !!r.output.inverted;
+  // /api/config/output and /api/config/system are two separate backend
+  // sections (OutputConfig vs SystemConfig); fetch both.
+  const [ro, rs] = await Promise.all([
+    api('/api/config/output'),
+    api('/api/config/system'),
+  ]);
+  document.getElementById('out-protocol').value = String(ro.output.protocol);
+  document.getElementById('out-baud').value = ro.output.baud;
+  document.getElementById('out-txpin').value = ro.output.tx_pin;
+  document.getElementById('out-rxpin').value = ro.output.rx_pin;
+  document.getElementById('out-inverted').checked = !!ro.output.inverted;
   for (let i = 0; i < 16; i++) {
-    document.getElementById('out-map-' + i).value = r.output.channel_map[i];
+    document.getElementById('out-map-' + i).value = ro.output.channel_map[i];
   }
-  document.getElementById('sys-failsafe-mode').value = String(r.system.failsafe_mode);
-  document.getElementById('sys-log-level').value = String(r.system.log_level);
-  document.getElementById('sys-serial-console').checked = !!r.system.serial_console;
+  document.getElementById('sys-failsafe-mode').value = String(rs.system.failsafe_mode);
+  document.getElementById('sys-log-level').value = String(rs.system.log_level);
+  document.getElementById('sys-serial-console').checked = !!rs.system.serial_console;
   for (let i = 0; i < 16; i++) {
-    document.getElementById('sys-failsafe-ch-' + i).value = r.system.failsafe_channels[i];
+    document.getElementById('sys-failsafe-ch-' + i).value = rs.system.failsafe_channels[i];
   }
 }
 
@@ -267,7 +234,7 @@ document.getElementById('output-form').addEventListener('submit', async (ev) => 
     channel_map.push(parseInt(document.getElementById('out-map-' + i).value, 10));
     failsafe_channels.push(parseInt(document.getElementById('sys-failsafe-ch-' + i).value, 10));
   }
-  const body = {
+  const outputBody = {
     output: {
       protocol: parseInt(document.getElementById('out-protocol').value, 10),
       baud: parseInt(document.getElementById('out-baud').value, 10),
@@ -276,6 +243,8 @@ document.getElementById('output-form').addEventListener('submit', async (ev) => 
       inverted: document.getElementById('out-inverted').checked,
       channel_map: channel_map,
     },
+  };
+  const systemBody = {
     system: {
       log_level: parseInt(document.getElementById('sys-log-level').value, 10),
       serial_console: document.getElementById('sys-serial-console').checked,
@@ -283,8 +252,13 @@ document.getElementById('output-form').addEventListener('submit', async (ev) => 
       failsafe_channels: failsafe_channels,
     },
   };
-  const r = await api('/api/config/output', 'POST', body);
-  flashSaveStatus('output-save-status', r);
+  // Two separate backend sections -> two separate POSTs.
+  const [ro, rs] = await Promise.all([
+    api('/api/config/output', 'POST', outputBody),
+    api('/api/config/system', 'POST', systemBody),
+  ]);
+  const ok = !!(ro && ro.ok) && !!(rs && rs.ok);
+  flashSaveStatus('output-save-status', { ok: ok });
 });
 
 /* ---------------------------------------------------------------------
@@ -368,14 +342,14 @@ function readPwmRow(i) {
 
 async function loadPwm() {
   const r = await api('/api/config/pwm');
-  for (let i = 0; i < 4; i++) fillPwmRow(i, r[i]);
+  for (let i = 0; i < 4; i++) fillPwmRow(i, r.pwm[i]);
 }
 
 document.getElementById('pwm-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  const body = [];
-  for (let i = 0; i < 4; i++) body.push(readPwmRow(i));
-  const r = await api('/api/config/pwm', 'POST', body);
+  const pwm = [];
+  for (let i = 0; i < 4; i++) pwm.push(readPwmRow(i));
+  const r = await api('/api/config/pwm', 'POST', { pwm: pwm });
   flashSaveStatus('pwm-save-status', r);
 });
 
@@ -405,23 +379,25 @@ startVoltagePolling();
 
 async function loadVoltageConfig() {
   const r = await api('/api/config/voltage');
-  document.getElementById('volt-enabled').checked = !!r.enabled;
-  document.getElementById('volt-adc-pin').value = r.adc_pin;
-  document.getElementById('volt-divider-ratio').value = r.divider_ratio;
-  document.getElementById('volt-calibration-factor').value = r.calibration_factor;
-  document.getElementById('volt-telemetry-override').checked = !!r.telemetry_override;
-  document.getElementById('volt-cell-count').value = r.cell_count;
+  document.getElementById('volt-enabled').checked = !!r.voltage.enabled;
+  document.getElementById('volt-adc-pin').value = r.voltage.adc_pin;
+  document.getElementById('volt-divider-ratio').value = r.voltage.divider_ratio;
+  document.getElementById('volt-calibration-factor').value = r.voltage.calibration_factor;
+  document.getElementById('volt-telemetry-override').checked = !!r.voltage.telemetry_override;
+  document.getElementById('volt-cell-count').value = r.voltage.cell_count;
 }
 
 document.getElementById('voltage-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const body = {
-    enabled: document.getElementById('volt-enabled').checked,
-    adc_pin: parseInt(document.getElementById('volt-adc-pin').value, 10),
-    divider_ratio: parseFloat(document.getElementById('volt-divider-ratio').value),
-    calibration_factor: parseFloat(document.getElementById('volt-calibration-factor').value),
-    telemetry_override: document.getElementById('volt-telemetry-override').checked,
-    cell_count: parseInt(document.getElementById('volt-cell-count').value, 10),
+    voltage: {
+      enabled: document.getElementById('volt-enabled').checked,
+      adc_pin: parseInt(document.getElementById('volt-adc-pin').value, 10),
+      divider_ratio: parseFloat(document.getElementById('volt-divider-ratio').value),
+      calibration_factor: parseFloat(document.getElementById('volt-calibration-factor').value),
+      telemetry_override: document.getElementById('volt-telemetry-override').checked,
+      cell_count: parseInt(document.getElementById('volt-cell-count').value, 10),
+    },
   };
   const r = await api('/api/config/voltage', 'POST', body);
   flashSaveStatus('voltage-save-status', r);
@@ -450,28 +426,30 @@ document.getElementById('net-use-dhcp').addEventListener('change', updateStaticF
 
 async function loadNetwork() {
   const r = await api('/api/config/network');
-  document.getElementById('net-ssid').value = r.ssid;
-  document.getElementById('net-password').value = r.password;
-  document.getElementById('net-ap-mode').checked = !!r.ap_mode;
-  document.getElementById('net-hostname').value = r.hostname;
-  document.getElementById('net-use-dhcp').checked = !!r.use_dhcp;
-  document.getElementById('net-static-ip').value = ipToString(r.static_ip);
-  document.getElementById('net-gateway').value = ipToString(r.gateway);
-  document.getElementById('net-netmask').value = ipToString(r.netmask);
+  document.getElementById('net-ssid').value = r.network.ssid;
+  document.getElementById('net-password').value = r.network.password;
+  document.getElementById('net-ap-mode').checked = !!r.network.ap_mode;
+  document.getElementById('net-hostname').value = r.network.hostname;
+  document.getElementById('net-use-dhcp').checked = !!r.network.use_dhcp;
+  document.getElementById('net-static-ip').value = r.network.static_ip;
+  document.getElementById('net-gateway').value = r.network.gateway;
+  document.getElementById('net-netmask').value = r.network.netmask;
   updateStaticFieldsVisibility();
 }
 
 document.getElementById('network-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const body = {
-    ssid: document.getElementById('net-ssid').value,
-    password: document.getElementById('net-password').value,
-    ap_mode: document.getElementById('net-ap-mode').checked,
-    use_dhcp: document.getElementById('net-use-dhcp').checked,
-    static_ip: stringToIp(document.getElementById('net-static-ip').value),
-    gateway: stringToIp(document.getElementById('net-gateway').value),
-    netmask: stringToIp(document.getElementById('net-netmask').value),
-    hostname: document.getElementById('net-hostname').value,
+    network: {
+      ssid: document.getElementById('net-ssid').value,
+      password: document.getElementById('net-password').value,
+      ap_mode: document.getElementById('net-ap-mode').checked,
+      use_dhcp: document.getElementById('net-use-dhcp').checked,
+      static_ip: document.getElementById('net-static-ip').value,
+      gateway: document.getElementById('net-gateway').value,
+      netmask: document.getElementById('net-netmask').value,
+      hostname: document.getElementById('net-hostname').value,
+    },
   };
   const r = await api('/api/config/network', 'POST', body);
   flashSaveStatus('network-save-status', r);
@@ -533,9 +511,9 @@ function pollOtaStatus() {
   otaPollTimer = setInterval(async () => {
     try {
       const st = await api('/api/ota/status');
-      document.getElementById('fw-ota-progress').value = st.progress;
+      document.getElementById('fw-ota-progress').value = st.progress_percent;
       document.getElementById('fw-ota-status').textContent =
-        st.state + (st.error ? (': ' + st.error) : '') + ' (' + st.progress + '%)';
+        st.state + (st.last_error ? (': ' + st.last_error) : '') + ' (' + st.progress_percent + '%)';
       if (st.state === 'success' || st.state === 'failed') {
         clearInterval(otaPollTimer);
         otaPollTimer = null;
