@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>RC Signal Router</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="error-banner" class="error-banner hidden" role="alert"></div>
+
+<header class="app-header">
+  <div class="brand">RC Signal Router</div>
+  <nav class="main-nav">
+    <a href="#/dashboard" data-route="dashboard">Dashboard</a>
+    <a href="#/receivers" data-route="receivers">Receivers</a>
+    <a href="#/output" data-route="output">Output</a>
+    <a href="#/pwm" data-route="pwm">PWM</a>
+    <a href="#/voltage" data-route="voltage">Voltage</a>
+    <a href="#/network" data-route="network">Network</a>
+    <a href="#/firmware" data-route="firmware">Firmware</a>
+  </nav>
+</header>
+
+<main class="app-main">
+
+<!-- ===================== DASHBOARD ===================== -->
+<section id="page-dashboard" class="page">
+  <h1>Dashboard</h1>
+  <div class="card-grid">
+    <div class="card">
+      <h2>Active Link</h2>
+      <div class="kv"><span>Active receiver</span><span id="dash-active-receiver">--</span></div>
+      <div class="kv"><span>Protocol</span><span id="dash-active-protocol">--</span></div>
+      <div class="kv"><span>RSSI</span><span id="dash-rssi">--</span></div>
+      <div class="kv"><span>Link quality</span><span id="dash-lq">--</span></div>
+      <div class="kv"><span>Failsafe</span><span id="dash-failsafe">--</span></div>
+      <div class="kv"><span>Switch count</span><span id="dash-switch-count">--</span></div>
+    </div>
+    <div class="card">
+      <h2>Power</h2>
+      <div class="kv"><span>Battery voltage</span><span id="dash-battery-voltage">--</span></div>
+      <div class="kv"><span>ADC raw</span><span id="dash-adc-mv">--</span></div>
+    </div>
+    <div class="card">
+      <h2>System</h2>
+      <div class="kv"><span>Uptime</span><span id="dash-uptime">--</span></div>
+      <div class="kv"><span>Free heap</span><span id="dash-free-heap">--</span></div>
+      <div class="kv"><span>WiFi</span><span id="dash-wifi-connected">--</span></div>
+      <div class="kv"><span>WiFi mode</span><span id="dash-wifi-ap-mode">--</span></div>
+      <div class="kv"><span>WiFi RSSI</span><span id="dash-wifi-rssi">--</span></div>
+      <div class="kv"><span>IP address</span><span id="dash-ip">--</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Log</h2>
+    <button id="dash-refresh-logs-btn" class="btn">Refresh log</button>
+    <pre id="dash-log-lines" class="log-view"></pre>
+  </div>
+</section>
+
+<!-- ===================== RECEIVERS ===================== -->
+<section id="page-receivers" class="page hidden">
+  <h1>Receivers</h1>
+  <form id="receivers-form">
+    <div class="card-grid">
+      <fieldset class="card">
+        <legend>Receiver A (port 0)</legend>
+        <label class="row"><span>Enabled</span>
+          <input type="checkbox" id="rx0-enabled"></label>
+        <label class="row"><span>Protocol</span>
+          <select id="rx0-protocol">
+            <option value="0">NONE</option>
+            <option value="1">CRSF</option>
+            <option value="2">SBUS</option>
+            <option value="3">MAVLINK</option>
+          </select></label>
+        <label class="row"><span>Priority (0=highest)</span>
+          <input type="number" id="rx0-priority" min="0" max="1" step="1"></label>
+        <label class="row"><span>Baud</span>
+          <input type="number" id="rx0-baud" min="9600" max="921600" step="1"></label>
+        <label class="row"><span>RX pin</span>
+          <input type="number" id="rx0-rxpin" min="-1" max="39" step="1"></label>
+        <label class="row"><span>TX pin</span>
+          <input type="number" id="rx0-txpin" min="-1" max="39" step="1"></label>
+        <label class="row"><span>Inverted</span>
+          <input type="checkbox" id="rx0-inverted"></label>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>Receiver B (port 1)</legend>
+        <label class="row"><span>Enabled</span>
+          <input type="checkbox" id="rx1-enabled"></label>
+        <label class="row"><span>Protocol</span>
+          <select id="rx1-protocol">
+            <option value="0">NONE</option>
+            <option value="1">CRSF</option>
+            <option value="2">SBUS</option>
+            <option value="3">MAVLINK</option>
+          </select></label>
+        <label class="row"><span>Priority (0=highest)</span>
+          <input type="number" id="rx1-priority" min="0" max="1" step="1"></label>
+        <label class="row"><span>Baud</span>
+          <input type="number" id="rx1-baud" min="9600" max="921600" step="1"></label>
+        <label class="row"><span>RX pin</span>
+          <input type="number" id="rx1-rxpin" min="-1" max="39" step="1"></label>
+        <label class="row"><span>TX pin</span>
+          <input type="number" id="rx1-txpin" min="-1" max="39" step="1"></label>
+        <label class="row"><span>Inverted</span>
+          <input type="checkbox" id="rx1-inverted"></label>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>Selection tuning</legend>
+        <label class="row"><span>RSSI threshold %</span>
+          <input type="number" id="sel-rssi-threshold" min="0" max="100"></label>
+        <label class="row"><span>LQ threshold %</span>
+          <input type="number" id="sel-lq-threshold" min="0" max="100"></label>
+        <label class="row"><span>Hysteresis %</span>
+          <input type="number" id="sel-hysteresis" min="0" max="100"></label>
+        <label class="row"><span>Switch delay (ms)</span>
+          <input type="number" id="sel-switch-delay" min="0" max="65535"></label>
+        <label class="row"><span>Min active time (ms)</span>
+          <input type="number" id="sel-min-active-time" min="0" max="65535"></label>
+        <label class="row"><span>Link timeout (ms)</span>
+          <input type="number" id="sel-link-timeout" min="0" max="65535"></label>
+      </fieldset>
+    </div>
+    <button type="submit" class="btn btn-primary">Save receivers</button>
+    <span class="save-status" id="receivers-save-status"></span>
+  </form>
+</section>
+
+<!-- ===================== OUTPUT ===================== -->
+<section id="page-output" class="page hidden">
+  <h1>Output</h1>
+  <form id="output-form">
+    <div class="card-grid">
+      <fieldset class="card">
+        <legend>Output port</legend>
+        <label class="row"><span>Protocol</span>
+          <select id="out-protocol">
+            <option value="0">NONE</option>
+            <option value="1">CRSF</option>
+            <option value="2">SBUS</option>
+            <option value="3">MAVLINK</option>
+          </select></label>
+        <label class="row"><span>Baud</span>
+          <input type="number" id="out-baud" min="9600" max="921600"></label>
+        <label class="row"><span>TX pin</span>
+          <input type="number" id="out-txpin" min="-1" max="39"></label>
+        <label class="row"><span>RX pin</span>
+          <input type="number" id="out-rxpin" min="-1" max="39"></label>
+        <label class="row"><span>Inverted</span>
+          <input type="checkbox" id="out-inverted"></label>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>Failsafe</legend>
+        <label class="row"><span>Failsafe mode</span>
+          <select id="sys-failsafe-mode">
+            <option value="0">HOLD_LAST</option>
+            <option value="1">STOP_PWM</option>
+            <option value="2">FAILSAFE_VALUES</option>
+          </select></label>
+        <label class="row"><span>Log level</span>
+          <select id="sys-log-level">
+            <option value="0">ERROR</option>
+            <option value="1">WARN</option>
+            <option value="2">INFO</option>
+            <option value="3">DEBUG</option>
+          </select></label>
+        <label class="row"><span>Serial console</span>
+          <input type="checkbox" id="sys-serial-console"></label>
+      </fieldset>
+    </div>
+
+    <div class="card">
+      <legend>Channel map (output channel = input channel) &amp; failsafe values (us)</legend>
+      <table class="channel-table" id="channel-map-table">
+        <thead><tr><th>Out ch</th><th>Source in ch</th><th>Failsafe us</th></tr></thead>
+        <tbody id="channel-map-body"><!-- 16 rows injected by app.js --></tbody>
+      </table>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save output</button>
+    <span class="save-status" id="output-save-status"></span>
+  </form>
+</section>
+
+<!-- ===================== PWM ===================== -->
+<section id="page-pwm" class="page hidden">
+  <h1>PWM outputs</h1>
+  <form id="pwm-form">
+    <div class="card-grid" id="pwm-rows"><!-- 4 rows injected by app.js --></div>
+    <button type="submit" class="btn btn-primary">Save PWM</button>
+    <span class="save-status" id="pwm-save-status"></span>
+  </form>
+</section>
+
+<!-- ===================== VOLTAGE ===================== -->
+<section id="page-voltage" class="page hidden">
+  <h1>Voltage monitor</h1>
+
+  <div class="card">
+    <h2>Live reading</h2>
+    <div class="kv"><span>ADC millivolts</span><span id="volt-live-adc-mv">--</span></div>
+    <div class="kv"><span>Battery voltage</span><span id="volt-live-voltage">--</span></div>
+    <div class="kv"><span>Per-cell voltage</span><span id="volt-live-per-cell">--</span></div>
+    <button id="volt-calibrate-btn" class="btn">Calibrate against measured voltage</button>
+  </div>
+
+  <form id="voltage-form">
+    <fieldset class="card">
+      <legend>Configuration</legend>
+      <label class="row"><span>Enabled</span>
+        <input type="checkbox" id="volt-enabled"></label>
+      <label class="row"><span>ADC pin</span>
+        <input type="number" id="volt-adc-pin" min="0" max="39"></label>
+      <label class="row"><span>Divider ratio (Vin/Vadc)</span>
+        <input type="number" id="volt-divider-ratio" min="0" step="0.001"></label>
+      <label class="row"><span>Calibration factor</span>
+        <input type="number" id="volt-calibration-factor" min="0" step="0.0001" readonly></label>
+      <label class="row"><span>Telemetry override</span>
+        <input type="checkbox" id="volt-telemetry-override"></label>
+      <label class="row"><span>Cell count</span>
+        <input type="number" id="volt-cell-count" min="1" max="16" step="1"></label>
+    </fieldset>
+    <button type="submit" class="btn btn-primary">Save voltage config</button>
+    <span class="save-status" id="voltage-save-status"></span>
+  </form>
+</section>
+
+<!-- ===================== NETWORK ===================== -->
+<section id="page-network" class="page hidden">
+  <h1>Network</h1>
+  <form id="network-form">
+    <fieldset class="card">
+      <legend>WiFi</legend>
+      <label class="row"><span>SSID</span>
+        <input type="text" id="net-ssid" maxlength="32"></label>
+      <label class="row"><span>Password</span>
+        <input type="password" id="net-password" maxlength="64"></label>
+      <label class="row"><span>AP mode (broadcast own network)</span>
+        <input type="checkbox" id="net-ap-mode"></label>
+      <label class="row"><span>Hostname</span>
+        <input type="text" id="net-hostname" maxlength="32"></label>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>Addressing</legend>
+      <label class="row"><span>Use DHCP</span>
+        <input type="checkbox" id="net-use-dhcp"></label>
+      <div id="net-static-fields">
+        <label class="row"><span>Static IP</span>
+          <input type="text" id="net-static-ip" placeholder="192.168.1.50"></label>
+        <label class="row"><span>Gateway</span>
+          <input type="text" id="net-gateway" placeholder="192.168.1.1"></label>
+        <label class="row"><span>Netmask</span>
+          <input type="text" id="net-netmask" placeholder="255.255.255.0"></label>
+      </div>
+    </fieldset>
+
+    <p class="hint">Changing WiFi credentials or static IP requires a reboot to take effect.</p>
+    <button type="submit" class="btn btn-primary">Save network</button>
+    <span class="save-status" id="network-save-status"></span>
+  </form>
+</section>
+
+<!-- ===================== FIRMWARE ===================== -->
+<section id="page-firmware" class="page hidden">
+  <h1>Firmware</h1>
+
+  <div class="card">
+    <h2>Device</h2>
+    <div class="kv"><span>Firmware version</span><span id="fw-version">--</span></div>
+    <button id="fw-restart-btn" class="btn btn-warn">Restart</button>
+    <button id="fw-factory-reset-btn" class="btn btn-danger">Factory reset</button>
+  </div>
+
+  <div class="card">
+    <h2>OTA update</h2>
+    <input type="file" id="fw-ota-file" accept=".bin">
+    <button id="fw-ota-upload-btn" class="btn btn-primary">Upload &amp; flash</button>
+    <progress id="fw-ota-progress" value="0" max="100"></progress>
+    <span id="fw-ota-status"></span>
+  </div>
+</section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
