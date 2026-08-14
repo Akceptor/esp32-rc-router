@@ -9,6 +9,7 @@ Esp32GpioOutput::Esp32GpioOutput() {
   memset(freq_hz_, 0, sizeof(freq_hz_));
   memset(resolution_bits_, 0, sizeof(resolution_bits_));
   memset(attached_, 0, sizeof(attached_));
+  memset(pin_, 0, sizeof(pin_));
 }
 
 bool Esp32GpioOutput::attachPwm(uint8_t pin, uint8_t ledc_channel, uint32_t freq_hz,
@@ -16,11 +17,12 @@ bool Esp32GpioOutput::attachPwm(uint8_t pin, uint8_t ledc_channel, uint32_t freq
   if (ledc_channel >= kMaxChannels) {
     return false;
   }
-  ledcSetup(ledc_channel, freq_hz, resolution_bits);
-  ledcAttachPin(pin, ledc_channel);
+  // Arduino-ESP32 v3.x replaced ledcSetup()+ledcAttachPin() with a single pin+channel call.
+  ledcAttachChannel(pin, freq_hz, resolution_bits, ledc_channel);
   freq_hz_[ledc_channel] = freq_hz;
   resolution_bits_[ledc_channel] = resolution_bits;
   attached_[ledc_channel] = true;
+  pin_[ledc_channel] = pin;
   return true;
 }
 
@@ -41,7 +43,7 @@ void Esp32GpioOutput::writePulseUs(uint8_t ledc_channel, uint16_t pulse_us) {
   if (duty >= max_duty) {
     duty = max_duty - 1;
   }
-  ledcWrite(ledc_channel, duty);
+  ledcWriteChannel(ledc_channel, duty);
 }
 
 void Esp32GpioOutput::writeDigital(uint8_t pin, bool level) {
@@ -52,7 +54,7 @@ void Esp32GpioOutput::detach(uint8_t ledc_channel) {
   if (ledc_channel >= kMaxChannels) {
     return;
   }
-  ledcDetachPin(ledc_channel);
+  ledcDetach(pin_[ledc_channel]);
   attached_[ledc_channel] = false;
 }
 

@@ -2,6 +2,7 @@
 #include "web/config_json.h"
 
 #if defined(ARDUINO)
+#include <new>
 #include <LittleFS.h>
 #include "logging/logger.h"
 
@@ -42,7 +43,12 @@ bool WebServerManager::applyPending() {
 #if defined(ARDUINO)
 
 bool WebServerManager::begin(uint16_t port) {
-  server_ = AsyncWebServer(port);
+  // AsyncWebServer has no copy/move assignment (it owns a std::list<unique_ptr<AsyncWebHandler>>
+  // internally), so re-targeting the already-constructed static member to a caller-supplied port
+  // requires destroying and reconstructing it in place rather than assigning — no heap allocation
+  // is introduced since `server_`'s storage is already part of this object.
+  server_.~AsyncWebServer();
+  new (&server_) AsyncWebServer(port);
   registerRoutes();
   server_.begin();
   LOG_I(kTag, "web server listening on port %u", (unsigned)port);

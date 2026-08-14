@@ -6,6 +6,12 @@ static const uint8_t RECEIVER_PORT_COUNT = 2;
 static const uint8_t PWM_PIN_COUNT = 4;
 static const uint16_t CONFIG_VERSION = 1;
 
+// The Arduino-ESP32 core (esp32-hal-gpio.h) #defines DISABLED as a plain pin-mode constant, which
+// textually clashes with the enumerator name below. Undefine it locally; nothing in this codebase
+// relies on the Arduino macro.
+#ifdef DISABLED
+#undef DISABLED
+#endif
 enum class PwmMode : uint8_t { DISABLED = 0, SERVO = 1, SWITCH = 2 };
 enum class FailsafeMode : uint8_t { HOLD_LAST = 0, STOP_PWM = 1, FAILSAFE_VALUES = 2 };
 

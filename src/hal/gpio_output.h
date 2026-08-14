@@ -28,6 +28,9 @@ class Esp32GpioOutput : public IGpioOutput { /* LEDC impl */
   uint32_t freq_hz_[kMaxChannels];
   uint8_t resolution_bits_[kMaxChannels];
   bool attached_[kMaxChannels];
+  uint8_t pin_[kMaxChannels];  // remembers which GPIO each ledc_channel is attached to, since the
+                               // Arduino-ESP32 v3.x LEDC API (ledcAttachChannel/ledcWriteChannel/
+                               // ledcDetach) addresses detach by pin, not by channel.
 };
 #endif
 
