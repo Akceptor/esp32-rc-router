@@ -61,6 +61,17 @@ App::App()
 void App::beginLogging() {
   // Early boot: default to INFO + serial console until config is loaded (a few hundred ms later),
   // matching the user-configurable SystemConfig fields once available.
+  //
+  // UART0 must actually be opened here via Serial.begin() before any log line is emitted --
+  // Logger::begin() only sets internal state and never calls Serial.begin() itself. Without this,
+  // there is no window at all where boot logs are visible over serial: later in setup(),
+  // output_manager_.begin(cfg.output) remaps UART0 to the OUT-protocol link (different baud/pins)
+  // via Esp32UartPort::begin(), which simply re-invokes Serial.begin() with the new parameters --
+  // safe on the ESP32 Arduino core, but it means the console is only usable in the window between
+  // here and that remap. 115200 matches platformio.ini's monitor_speed.
+#if defined(ARDUINO)
+  Serial.begin(115200);
+#endif
   Logger::instance().begin(LogLevel::INFO, true);
   LOG_I("APP", "RC Signal Router firmware %s booting", FIRMWARE_VERSION);
 }
